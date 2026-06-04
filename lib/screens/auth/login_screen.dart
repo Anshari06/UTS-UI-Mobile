@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../helpdesk/helpdesk_home_screen.dart';
+import '../admin/admin_home_screen.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
 
@@ -63,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        "📌 Akun demo: user / 123 atau help / 123",
+                        "📌 Akun demo: user / 123, help / 123, admin / 123",
                         style: TextStyle(
                           color: Colors.blue,
                           fontSize: 13,
@@ -189,10 +190,17 @@ class _LoginScreenState extends State<LoginScreen> {
           context,
           MaterialPageRoute(builder: (context) => const HelpdeskHomeScreen()),
         );
+      } else if (username == 'admin' && password == '123') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Login gagal. Gunakan user/123 atau help/123"),
+            content: Text(
+              "Login gagal. Gunakan user/123, help/123, atau admin/123",
+            ),
           ),
         );
       }
