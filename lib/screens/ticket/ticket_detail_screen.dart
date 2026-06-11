@@ -14,9 +14,24 @@ class TicketDetailScreen extends StatefulWidget {
 
 class _TicketDetailScreenState extends State<TicketDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TicketStore.instance.fetchCommentsForTicket(widget.ticket.id);
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
+      case 'send':
+        return Colors.blueGrey;
       case 'open':
         return Colors.green;
       case 'progress':
@@ -24,14 +39,18 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       case 'done':
         return Colors.blue;
       default:
-        return Colors.grey;
+        return Colors.blueGrey;
     }
   }
 
-  @override
-  void dispose() {
-    _messageController.dispose();
-    super.dispose();
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    await TicketStore.instance.addUserMessage(widget.ticket.id, text);
+    _messageController.clear();
+    if (mounted) setState(() => _isSending = false);
   }
 
   @override
@@ -117,19 +136,27 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 _buildTimelineStep(
-                  title: "Ticket Created (Open)",
+                  title: "Terkirim (Send)",
                   isActive: true,
                   isLast: false,
                 ),
                 _buildTimelineStep(
-                  title: "In Progress",
+                  title: "Tiket Dibuka (Open)",
+                  isActive:
+                      currentTicket.status.toLowerCase() == 'open' ||
+                      currentTicket.status.toLowerCase() == 'progress' ||
+                      currentTicket.status.toLowerCase() == 'done',
+                  isLast: false,
+                ),
+                _buildTimelineStep(
+                  title: "Sedang Diproses (Progress)",
                   isActive:
                       currentTicket.status.toLowerCase() == 'progress' ||
                       currentTicket.status.toLowerCase() == 'done',
                   isLast: false,
                 ),
                 _buildTimelineStep(
-                  title: "Resolved (Done)",
+                  title: "Selesai (Done)",
                   isActive: currentTicket.status.toLowerCase() == 'done',
                   isLast: true,
                 ),
@@ -144,56 +171,77 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     padding: const EdgeInsets.all(14),
                     child: Column(
                       children: [
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: messages.length,
-                          separatorBuilder: (context, _) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final message = messages[index];
-                            final isUser = message.sender == 'User';
-                            return Align(
-                              alignment: isUser
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isUser
-                                      ? const Color(
-                                          0xFF0F766E,
-                                        ).withValues(alpha: 0.12)
-                                      : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      message.sender,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(message.text),
-                                  ],
-                                ),
+                        if (messages.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                'Belum ada pesan. Mulai percakapan dengan helpdesk.',
+                                style: TextStyle(color: Colors.grey),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: messages.length,
+                            separatorBuilder: (context, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              final isUser = message.sender == 'User';
+                              return Align(
+                                alignment: isUser
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isUser
+                                        ? const Color(0xFF0F766E)
+                                            .withValues(alpha: 0.12)
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        message.sender,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(message.text),
+                                      if (message.attachment != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Lampiran: ${message.attachment}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
                               child: TextField(
                                 controller: _messageController,
+                                onSubmitted: (_) => _sendMessage(),
                                 decoration: const InputDecoration(
                                   hintText: "Tulis pesan ke helpdesk...",
                                 ),
@@ -201,18 +249,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                             ),
                             const SizedBox(width: 10),
                             IconButton.filled(
-                              onPressed: () {
-                                final text = _messageController.text.trim();
-                                if (text.isEmpty) {
-                                  return;
-                                }
-                                TicketStore.instance.addUserMessage(
-                                  currentTicket.id,
-                                  text,
-                                );
-                                _messageController.clear();
-                              },
-                              icon: const Icon(Icons.send),
+                              onPressed: _isSending ? null : _sendMessage,
+                              icon: _isSending
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send),
                             ),
                           ],
                         ),

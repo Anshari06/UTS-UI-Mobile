@@ -16,9 +16,24 @@ class HelpdeskTicketDetailScreen extends StatefulWidget {
 class _HelpdeskTicketDetailScreenState
     extends State<HelpdeskTicketDetailScreen> {
   final TextEditingController _replyController = TextEditingController();
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    TicketStore.instance.fetchCommentsForTicket(widget.ticket.id);
+  }
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
+      case 'send':
+        return Colors.blueGrey;
       case 'open':
         return Colors.green;
       case 'progress':
@@ -26,23 +41,23 @@ class _HelpdeskTicketDetailScreenState
       case 'done':
         return Colors.blue;
       default:
-        return Colors.grey;
+        return Colors.blueGrey;
     }
   }
 
-  // List of helpdesk staff
-  final List<String> _helpdeskStaff = [
-    'Ahmad',
-    'Budi',
-    'Citra',
-    'Dani',
-    'Eka',
-    'Fajar',
-  ];
+  Future<void> _sendReply() async {
+    final text = _replyController.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() => _isSending = true);
+    await TicketStore.instance.addHelpdeskMessage(widget.ticket.id, text);
+    _replyController.clear();
+    if (mounted) setState(() => _isSending = false);
+  }
 
   Widget _buildAssignDropdown(Ticket ticket) {
     return DropdownButtonFormField<String>(
-      initialValue: ticket.assignedTo,
+      value: ticket.assignedTo,
       hint: const Text('Pilih staff...'),
       items: [
         const DropdownMenuItem<String>(
@@ -64,6 +79,15 @@ class _HelpdeskTicketDetailScreenState
       ),
     );
   }
+
+  final List<String> _helpdeskStaff = [
+    'Ahmad',
+    'Budi',
+    'Citra',
+    'Dani',
+    'Eka',
+    'Fajar',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -134,27 +158,76 @@ class _HelpdeskTicketDetailScreenState
                           runSpacing: 8,
                           children: [
                             ActionChip(
+                              avatar: Icon(
+                                Icons.send,
+                                size: 16,
+                                color: currentTicket.status == 'Send'
+                                    ? Colors.white
+                                    : Colors.blueGrey,
+                              ),
+                              label: const Text('Send'),
+                              backgroundColor: currentTicket.status == 'Send'
+                                  ? Colors.blueGrey
+                                  : Colors.grey.shade200,
+                              onPressed: () async {
+                                await TicketStore.instance.updateStatus(
+                                  currentTicket.id,
+                                  'Send',
+                                );
+                              },
+                            ),
+                            ActionChip(
+                              avatar: Icon(
+                                Icons.mark_email_unread_outlined,
+                                size: 16,
+                                color: currentTicket.status == 'Open'
+                                    ? Colors.white
+                                    : Colors.green,
+                              ),
                               label: const Text('Open'),
-                              onPressed: () {
-                                TicketStore.instance.updateStatus(
+                              backgroundColor: currentTicket.status == 'Open'
+                                  ? Colors.green
+                                  : Colors.grey.shade200,
+                              onPressed: () async {
+                                await TicketStore.instance.updateStatus(
                                   currentTicket.id,
                                   'Open',
                                 );
                               },
                             ),
                             ActionChip(
+                              avatar: Icon(
+                                Icons.hourglass_bottom,
+                                size: 16,
+                                color: currentTicket.status == 'Progress'
+                                    ? Colors.white
+                                    : Colors.orange,
+                              ),
                               label: const Text('Progress'),
-                              onPressed: () {
-                                TicketStore.instance.updateStatus(
+                              backgroundColor: currentTicket.status == 'Progress'
+                                  ? Colors.orange
+                                  : Colors.grey.shade200,
+                              onPressed: () async {
+                                await TicketStore.instance.updateStatus(
                                   currentTicket.id,
                                   'Progress',
                                 );
                               },
                             ),
                             ActionChip(
+                              avatar: Icon(
+                                Icons.check_circle_outline,
+                                size: 16,
+                                color: currentTicket.status == 'Done'
+                                    ? Colors.white
+                                    : Colors.blue,
+                              ),
                               label: const Text('Done'),
-                              onPressed: () {
-                                TicketStore.instance.updateStatus(
+                              backgroundColor: currentTicket.status == 'Done'
+                                  ? Colors.blue
+                                  : Colors.grey.shade200,
+                              onPressed: () async {
+                                await TicketStore.instance.updateStatus(
                                   currentTicket.id,
                                   'Done',
                                 );
@@ -163,7 +236,6 @@ class _HelpdeskTicketDetailScreenState
                           ],
                         ),
                         const SizedBox(height: 20),
-                        // Assignment Section
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -244,57 +316,78 @@ class _HelpdeskTicketDetailScreenState
                     padding: const EdgeInsets.all(14),
                     child: Column(
                       children: [
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: messages.length,
-                          separatorBuilder: (context, _) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final message = messages[index];
-                            final isHelpdesk = message.sender == 'Helpdesk';
-
-                            return Align(
-                              alignment: isHelpdesk
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isHelpdesk
-                                      ? const Color(
-                                          0xFF0F766E,
-                                        ).withValues(alpha: 0.12)
-                                      : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      message.sender,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(message.text),
-                                  ],
-                                ),
+                        if (messages.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: Text(
+                                'Belum ada pesan dari user.',
+                                style: TextStyle(color: Colors.grey),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: messages.length,
+                            separatorBuilder: (context, _) =>
+                                const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final message = messages[index];
+                              final isHelpdesk = message.sender == 'Helpdesk';
+
+                              return Align(
+                                alignment: isHelpdesk
+                                    ? Alignment.centerRight
+                                    : Alignment.centerLeft,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isHelpdesk
+                                        ? const Color(0xFF0F766E)
+                                            .withValues(alpha: 0.12)
+                                        : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        message.sender,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(message.text),
+                                      if (message.attachment != null) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Lampiran: ${message.attachment}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.blue.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
                               child: TextField(
                                 controller: _replyController,
+                                onSubmitted: (_) => _sendReply(),
                                 decoration: const InputDecoration(
                                   hintText: 'Balas ke user...',
                                 ),
@@ -302,18 +395,17 @@ class _HelpdeskTicketDetailScreenState
                             ),
                             const SizedBox(width: 10),
                             IconButton.filled(
-                              onPressed: () {
-                                final text = _replyController.text.trim();
-                                if (text.isEmpty) {
-                                  return;
-                                }
-                                TicketStore.instance.addHelpdeskMessage(
-                                  currentTicket.id,
-                                  text,
-                                );
-                                _replyController.clear();
-                              },
-                              icon: const Icon(Icons.send),
+                              onPressed: _isSending ? null : _sendReply,
+                              icon: _isSending
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.send),
                             ),
                           ],
                         ),

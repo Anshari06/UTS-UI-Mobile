@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import 'login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -9,6 +10,7 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+  final AuthService _authService = AuthService();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
   final TextEditingController newPasswordController = TextEditingController();
@@ -17,6 +19,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   int _currentStep = 0; // 0: Email, 1: Verification, 2: New Password
   bool _showPassword = false;
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +299,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     );
   }
 
-  void _handleEmailSubmit() {
+  void _handleEmailSubmit() async {
+    // FR-004: Reset Password - Request password reset
     final email = emailController.text.trim();
     if (email.isEmpty) {
       ScaffoldMessenger.of(
@@ -309,6 +313,20 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Email tidak valid")));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final error = await _authService.requestPasswordReset(email: email);
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -341,7 +359,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     }
   }
 
-  void _handlePasswordReset() {
+  void _handlePasswordReset() async {
+    // FR-004: Reset Password - Set new password
     final password = newPasswordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
@@ -363,6 +382,21 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Password tidak cocok")));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    // Update password untuk user yang sedang login
+    final error = await _authService.updatePassword(newPassword: password);
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 

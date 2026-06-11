@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/splash/splash_screen.dart';
 import 'services/theme_manager.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://sqkiaufrxrdwitxvment.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxa2lhdWZyeHJkd2l0eHZtZW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NzQxNjksImV4cCI6MjA5NjE1MDE2OX0.D7PZDEdbjm5_7o3AY4tMHePw2Q2MgDyB4Dy6eT7p7pk',
+  );
+
   runApp(const MyApp());
 }
 
@@ -164,7 +172,7 @@ class _MyAppState extends State<MyApp> {
       themeMode: ThemeManager.instance.isDarkMode
           ? ThemeMode.dark
           : ThemeMode.light,
-      home: const LoginScreen(),
+      home: const SplashScreen(),
     );
   }
 }

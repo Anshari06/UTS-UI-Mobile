@@ -4,7 +4,7 @@ class TicketHistory {
   final String performedBy;
   final String? oldValue;
   final String? newValue;
-  final DateTime timestamp;
+  final DateTime createdAt;
 
   TicketHistory({
     required this.ticketId,
@@ -12,6 +12,6 @@ class TicketHistory {
     required this.performedBy,
     this.oldValue,
     this.newValue,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
 }

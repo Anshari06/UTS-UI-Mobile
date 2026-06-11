@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../helpdesk/helpdesk_home_screen.dart';
 import '../admin/admin_home_screen.dart';
 import 'register_screen.dart';
 import 'reset_password_screen.dart';
+
+// FR-001: Login - Pengguna dapat login menggunakan username dan password
+// FR-002: Logout - Pengguna dapat logout dari aplikasi
+// FR-003: Register - Pengguna dapat melakukan pendaftaran aplikasi
+// FR-004: Reset Password - Pengguna dapat reset password
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +19,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final AuthService _authService = AuthService();
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool _showPassword = false;
@@ -64,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text(
-                        "📌 Akun demo: user / 123, help / 123, admin / 123",
+                        "Login menggunakan akun yang terdaftar di database.",
                         style: TextStyle(
                           color: Colors.blue,
                           fontSize: 13,
@@ -103,13 +110,73 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 24), 
 
                     // Login Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _handleLogin,
+                        onPressed: () async {
+                          final error = await _authService.login(
+                            username: usernameController.text.trim(),
+                            password: passwordController.text.trim(),
+                          );
+
+                          if (!mounted) return;
+
+                          if (error != null) {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(error)));
+                          } else {
+                            final profile = await _authService
+                                .getCurrentProfile();
+
+                            if (!mounted) return;
+
+                            if (profile == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Profile tidak ditemukan'),
+                                ),
+                              );
+                              return;
+                            }
+
+                            final role = (profile['role'] as String?)
+                                ?.trim()
+                                .toLowerCase();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Login berhasil')),
+                            );
+
+                            if (role == 'helpdesk' || role == 'help') {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const HelpdeskHomeScreen(),
+                                ),
+                              );
+                            } else if (role == 'admin') {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const AdminHomeScreen(),
+                                ),
+                              );
+                            } else {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const DashboardScreen(),
+                                ),
+                              );
+                            }
+                          }
+                        },
                         child: const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Text("Login"),
@@ -169,42 +236,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-
-  void _handleLogin() {
-    final String username = usernameController.text.trim().toLowerCase();
-    final String password = passwordController.text.trim();
-
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username & Password wajib diisi")),
-      );
-    } else {
-      if (username == 'user' && password == '123') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        );
-      } else if (username == 'help' && password == '123') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HelpdeskHomeScreen()),
-        );
-      } else if (username == 'admin' && password == '123') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminHomeScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Login gagal. Gunakan user/123, help/123, atau admin/123",
-            ),
-          ),
-        );
-      }
-    }
   }
 
   @override

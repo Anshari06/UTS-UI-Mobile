@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -9,8 +10,8 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final AuthService _authService = AuthService();
   final TextEditingController usernameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
@@ -72,18 +73,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         prefixIcon: Icon(Icons.person_outline),
                         hintText: "Masukkan username unik",
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Email Field
-                    TextField(
-                      controller: emailController,
-                      decoration: const InputDecoration(
-                        labelText: "Email",
-                        prefixIcon: Icon(Icons.email_outlined),
-                        hintText: "nama@email.com",
-                      ),
-                      keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 16),
 
@@ -204,11 +193,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   void _handleRegister() {
     final username = usernameController.text.trim();
-    final email = emailController.text.trim();
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
-    if (username.isEmpty || email.isEmpty || password.isEmpty) {
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("Semua field harus diisi")));
@@ -229,19 +217,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    if (!email.contains('@')) {
+    _submitRegister(username: username, password: password);
+  }
+
+  Future<void> _submitRegister({
+    required String username,
+    required String password,
+  }) async {
+    final error = await _authService.register(
+      username: username,
+      password: password,
+    );
+
+    if (!mounted) return;
+
+    if (error != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Email tidak valid")));
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
-    // Show success message
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Pendaftaran berhasil! Silakan login.")),
     );
 
-    // Navigate back to login
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         Navigator.pushReplacement(
@@ -255,7 +255,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     usernameController.dispose();
-    emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
     super.dispose();
