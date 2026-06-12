@@ -23,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool _showPassword = false;
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -117,35 +118,84 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
+                          final username = usernameController.text.trim();
+                          final password = passwordController.text.trim();
+
+                          if (username.isEmpty || password.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Username dan password harus diisi!'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setState(() => _isLoading = true);
+
                           final error = await _authService.login(
-                            username: usernameController.text.trim(),
-                            password: passwordController.text.trim(),
+                            username: username,
+                            password: password,
                           );
 
                           if (!mounted) return;
+                          setState(() => _isLoading = false);
 
                           if (error != null) {
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text(error)));
+                            // Parse error message untuk kasih feedback spesifik
+                            String errorMessage;
+                            final lowerError = error.toLowerCase();
+
+                            if (lowerError.contains('invalid login credentials') ||
+                                lowerError.contains('invalid email or password') ||
+                                lowerError.contains('wrong') ||
+                                lowerError.contains('password')) {
+                              errorMessage = 'Password salah! Coba lagi.';
+                            } else if (lowerError.contains('email') ||
+                                lowerError.contains('not found') ||
+                                lowerError.contains('user not found')) {
+                              errorMessage = 'Akun tidak ditemukan!';
+                            } else if (lowerError.contains('rate limit') ||
+                                lowerError.contains('too many')) {
+                              errorMessage = 'Terlalu banyak percobaan. Tunggu sebentar.';
+                            } else {
+                              errorMessage = 'Login gagal: ${error.length > 50 ? error.substring(0, 50) : error}';
+                            }
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.error_outline, color: Colors.white),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(errorMessage)),
+                                  ],
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
                           } else {
                             final profile = await _authService
                                 .getCurrentProfile();
 
                             if (!mounted) return;
 
+                            String role = 'user';
+
+                            // If profile doesn't exist, create one
                             if (profile == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Profile tidak ditemukan'),
+                                  content: Text('Membuat profile baru...'),
                                 ),
                               );
-                              return;
+                              // Try to get role from user metadata or default to 'user'
+                              role = 'user';
+                            } else {
+                              role = (profile['role'] as String?)
+                                  ?.trim()
+                                  .toLowerCase() ?? 'user';
                             }
-
-                            final role = (profile['role'] as String?)
-                                ?.trim()
-                                .toLowerCase();
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Login berhasil')),
@@ -177,10 +227,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           }
                         },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text("Login"),
-                        ),
+                        child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text("Login"),
                       ),
                     ),
                     const SizedBox(height: 16),

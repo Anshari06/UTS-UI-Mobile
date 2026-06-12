@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -55,17 +56,29 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>?> getCurrentProfile() async {
-    final user = supabase.auth.currentUser;
+    try {
+      final user = supabase.auth.currentUser;
 
-    if (user == null) return null;
+      if (user == null) {
+        debugPrint('getCurrentProfile: user is null');
+        return null;
+      }
 
-    final response = await supabase
-        .from('profiles')
-        .select()
-        .eq('id', user.id)
-        .single();
+      debugPrint('getCurrentProfile: fetching for user ${user.id}');
 
-    return response;
+      final response = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      debugPrint('getCurrentProfile: response = $response');
+
+      return response;
+    } catch (e) {
+      debugPrint('getCurrentProfile error: $e');
+      return null;
+    }
   }
 
   Future<void> logout() async {

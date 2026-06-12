@@ -54,10 +54,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
           appBar: AppBar(
             title: const Text("Daftar Tiket"),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.refresh),
-                onPressed: _refresh,
-              ),
+              IconButton(icon: const Icon(Icons.refresh), onPressed: _refresh),
             ],
           ),
           body: _isLoading
@@ -73,11 +70,16 @@ class _TicketListScreenState extends State<TicketListScreen> {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.inbox_outlined,
-                                      size: 60, color: Colors.grey),
+                                  Icon(
+                                    Icons.inbox_outlined,
+                                    size: 60,
+                                    color: Colors.grey,
+                                  ),
                                   SizedBox(height: 12),
-                                  Text("Belum ada tiket",
-                                      style: TextStyle(color: Colors.grey)),
+                                  Text(
+                                    "Belum ada tiket",
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
                                 ],
                               ),
                             ),
@@ -113,26 +115,26 @@ class _TicketListScreenState extends State<TicketListScreen> {
                                 itemCount: tickets.length,
                                 itemBuilder: (context, index) {
                                   final ticket = tickets[index];
-                                  final preview = TicketStore.instance.latestMessagePreview(ticket.id);
-                                  final sender = TicketStore.instance.latestMessageSender(ticket.id);
+                                  final preview = TicketStore.instance
+                                      .latestMessagePreview(ticket.id);
+                                  final sender = TicketStore.instance
+                                      .latestMessageSender(ticket.id);
 
                                   return Card(
-                                    margin:
-                                        const EdgeInsets.only(bottom: 12),
+                                    margin: const EdgeInsets.only(bottom: 12),
                                     child: ListTile(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 10,
-                                      ),
+                                            horizontal: 20,
+                                            vertical: 10,
+                                          ),
                                       leading: CircleAvatar(
                                         backgroundColor: _getStatusColor(
                                           ticket.status,
                                         ).withValues(alpha: 0.15),
                                         child: Icon(
                                           Icons.confirmation_number,
-                                          color:
-                                              _getStatusColor(ticket.status),
+                                          color: _getStatusColor(ticket.status),
                                         ),
                                       ),
                                       title: Text(
@@ -142,10 +144,12 @@ class _TicketListScreenState extends State<TicketListScreen> {
                                         ),
                                       ),
                                       subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text("ID: #${ticket.id}"),
-                                          if (preview.isNotEmpty && preview != 'Belum ada chat') ...[
+                                          if (preview.isNotEmpty &&
+                                              preview != 'Belum ada chat') ...[
                                             const SizedBox(height: 4),
                                             if (sender.isNotEmpty)
                                               Text(
@@ -168,8 +172,9 @@ class _TicketListScreenState extends State<TicketListScreen> {
                                             fontSize: 12,
                                           ),
                                         ),
-                                        backgroundColor:
-                                            _getStatusColor(ticket.status),
+                                        backgroundColor: _getStatusColor(
+                                          ticket.status,
+                                        ),
                                       ),
                                       onTap: () {
                                         Navigator.push(
@@ -177,7 +182,8 @@ class _TicketListScreenState extends State<TicketListScreen> {
                                           MaterialPageRoute(
                                             builder: (context) =>
                                                 TicketTrackingScreen(
-                                                    ticketId: ticket.id),
+                                                  ticketId: ticket.id,
+                                                ),
                                           ),
                                         );
                                       },
