@@ -219,6 +219,39 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
+  /// Fetch history/tracking untuk satu tiket saja
+  Future<void> fetchHistoryForTicket(int ticketId) async {
+    try {
+      final rows = await _ticketService.getTicketHistories(ticketId);
+      // Merge ke _history yang sudah ada (avoid dupe)
+      final existingIds = _history
+          .where((h) => h.ticketId == ticketId)
+          .map((h) => '${h.ticketId}_${h.createdAt.millisecondsSinceEpoch}')
+          .toSet();
+
+      for (final row in rows) {
+        final createdAt = row['created_at'] != null
+            ? DateTime.parse(row['created_at'] as String)
+            : DateTime.now();
+        final key = '${row['ticket_id']}_${createdAt.millisecondsSinceEpoch}';
+        if (!existingIds.contains(key)) {
+          _history.add(TicketHistory(
+            ticketId: row['ticket_id'] as int,
+            action: row['action'] as String,
+            performedBy: row['action_by'] as String? ?? 'Unknown',
+            oldValue: row['old_value'] as String?,
+            newValue: row['new_value'] as String?,
+            createdAt: createdAt,
+          ));
+        }
+      }
+      _history.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching history for ticket $ticketId: $e');
+    }
+  }
+
   List<ChatMessage> messagesForTicket(int ticketId) {
     return List.unmodifiable(_messages[ticketId] ?? const []);
   }
@@ -386,6 +419,14 @@ class TicketStore extends ChangeNotifier {
       action: 'Ditugaskan kepada $assignee',
       oldValue: oldAssignee,
       newValue: assignee,
+    );
+
+    // Notify the assigned helpdesk user
+    await _notificationService.notifyUser(
+      userId: assignee,
+      title: 'Tiket Ditugaskan',
+      body: 'Tiket #$ticketId: Anda ditugaskan untuk menangani tiket ini',
+      ticketId: ticketId,
     );
 
     // Notify the ticket owner user

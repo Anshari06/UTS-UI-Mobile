@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ticket_create_screen.dart';
-import 'ticket_tracking_screen.dart';
+import 'ticket_detail_screen.dart';
 import '../../services/ticket_store.dart';
 
 // FR-005: User dapat melihat daftar tiket
@@ -181,9 +181,7 @@ class _TicketListScreenState extends State<TicketListScreen> {
                                           context,
                                           MaterialPageRoute(
                                             builder: (context) =>
-                                                TicketTrackingScreen(
-                                                  ticketId: ticket.id,
-                                                ),
+                                                TicketDetailScreen(ticket: ticket),
                                           ),
                                         );
                                       },

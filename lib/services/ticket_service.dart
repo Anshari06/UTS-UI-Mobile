@@ -97,11 +97,13 @@ class TicketService {
 
   // Update assigned_to in database
   Future<bool> assignTicketTo(int ticketId, String assignee) async {
+    debugPrint('assignTicketTo CALLED: ticketId=$ticketId, assignee=$assignee');
     try {
-      await supabase
+      final result = await supabase
           .from('tickets')
           .update({'assigned_to': assignee})
           .eq('id', ticketId);
+      debugPrint('assignTicketTo result: $result');
       return true;
     } catch (e) {
       debugPrint('assignTicketTo error: $e');

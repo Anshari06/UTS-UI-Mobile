@@ -13,7 +13,7 @@ import 'user_management_screen.dart';
 // FR-007: Admin dapat melakukan manajemen tiket
 // Flow: User buat tiket → Admin terima & assign → Helpdesk tangani → Selesai
 // - Melihat semua tiket masuk
-// - Assign tiket ke helpdesk
+// - Assign tiket ke helpdesk (assigned_to = profiles.id / UUID)
 // - Update status tiket
 // - Memberikan respon
 // - Mengelola daftar pengguna
@@ -37,9 +37,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   String? _currentUserId;
   List<Map<String, dynamic>> _helpdeskList = [];
 
-  // Filter state
+  // Filter state — pakai UUID untuk filter helpdesk
   String? _statusFilter;
-  String? _helpdeskFilter;
+  String? _helpdeskFilter; // UUID (profiles.id)
 
   final List<String> _statusOptions = ['Semua', 'Send', 'Open', 'Progress', 'Done'];
 
@@ -74,7 +74,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  /// Filter tickets based on status and helpdesk assignment
+  /// Convert UUID → name untuk display
+  String _helpdeskNameForId(String? id) {
+    if (id == null) return 'Belum ditugaskan';
+    try {
+      final found = _helpdeskList.firstWhere((h) => h['id'] == id, orElse: () => {});
+      return (found['name'] as String?) ?? 'Tidak dikenal';
+    } catch (_) {
+      return 'Tidak dikenal';
+    }
+  }
+
+  /// Filter tickets — assignedTo di DB = UUID
   List<Ticket> get _filteredTickets {
     var tickets = TicketStore.instance.tickets;
 
@@ -126,18 +137,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  /// Show assign dialog — admin assigns ticket to a helpdesk
+  /// Show assign dialog — assigned_to = profiles.id (UUID)
   Future<void> _showAssignDialog(Ticket ticket) async {
-    String? selectedHelpdesk = ticket.assignedTo;
+    final result = _AssignDialogResult();
 
-    final result = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          // Refresh helpdesk list
-          final helpdesks = _helpdeskList
-              .map((h) => {'name': h['name'] as String?, 'id': h['id'] as String?})
-              .toList();
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          String? selectedId = ticket.assignedTo;
 
           return AlertDialog(
             title: Text('Tugaskan Tiket #${ticket.id}'),
@@ -145,7 +154,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Judul: ${ticket.title}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  ticket.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   ticket.description.isEmpty ? 'Tanpa deskripsi' : ticket.description,
@@ -153,9 +165,34 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (ticket.assignedTo != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Colors.amber.shade700),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Saat ini: ${_helpdeskNameForId(ticket.assignedTo)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.amber.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedHelpdesk,
+                  value: selectedId,
                   decoration: const InputDecoration(
                     labelText: 'Tugaskan ke Helpdesk',
                     prefixIcon: Icon(Icons.person_add_alt),
@@ -163,24 +200,31 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   items: [
                     const DropdownMenuItem<String>(
                       value: null,
-                      child: Text('-- Belum Ditugaskan --'),
+                      child: Text('-- Lepas Penugasan --'),
                     ),
-                    ...helpdesks.map((h) => DropdownMenuItem<String>(
-                          value: h['name'],
-                          child: Text(h['name'] ?? '-'),
+                    ..._helpdeskList.map((h) => DropdownMenuItem<String>(
+                          value: h['id'] as String?,
+                          child: Text(h['name'] as String? ?? '-'),
                         )),
                   ],
-                  onChanged: (v) => setDialogState(() => selectedHelpdesk = v),
+                  onChanged: (v) => setDialogState(() => selectedId = v),
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () {
+                  result.confirmed = false;
+                  Navigator.pop(dialogContext);
+                },
                 child: const Text('Batal'),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () {
+                  result.confirmed = true;
+                  result.selectedId = selectedId;
+                  Navigator.pop(dialogContext);
+                },
                 child: const Text('Simpan'),
               ),
             ],
@@ -189,22 +233,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ),
     );
 
-    if (result != true) return;
+    if (!result.confirmed) return;
 
-    if (selectedHelpdesk == null) {
-      // Unassign
+    if (result.selectedId == null) {
       await TicketStore.instance.unassignTicket(ticket.id);
     } else {
-      await TicketStore.instance.assignTicket(ticket.id, selectedHelpdesk!);
+      await TicketStore.instance.assignTicket(ticket.id, result.selectedId!);
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          selectedHelpdesk == null
-              ? 'Tiket #${ticket.id} dibatalkan dari penugasan'
-              : 'Tiket #${ticket.id} ditugaskan ke $selectedHelpdesk',
+          result.selectedId == null
+              ? 'Tiket #${ticket.id} dilepas dari penugasan'
+              : 'Tiket #${ticket.id} ditugaskan ke ${_helpdeskNameForId(result.selectedId)}',
         ),
         backgroundColor: Colors.green,
       ),
@@ -257,25 +300,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     const Text('Ringkasan Tiket',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 12),
-                    _buildStatsCard(title: 'Total Tiket',
-                        value: TicketStore.instance.tickets.length.toString(),
-                        icon: Icons.confirmation_number_outlined,
-                        color: const Color(0xFF0F766E)),
+                    _buildStatsCard(
+                      title: 'Total Tiket',
+                      value: TicketStore.instance.tickets.length.toString(),
+                      icon: Icons.confirmation_number_outlined,
+                      color: const Color(0xFF0F766E),
+                    ),
                     const SizedBox(height: 10),
-                    _buildStatsCard(title: 'Send',
-                        value: _sendCount.toString(),
+                    _buildStatsCard(title: 'Send', value: _sendCount.toString(),
                         icon: Icons.send_outlined, color: Colors.blueGrey),
                     const SizedBox(height: 10),
-                    _buildStatsCard(title: 'Open',
-                        value: _openCount.toString(),
+                    _buildStatsCard(title: 'Open', value: _openCount.toString(),
                         icon: Icons.mark_email_unread_outlined, color: const Color(0xFF16A34A)),
                     const SizedBox(height: 10),
-                    _buildStatsCard(title: 'Progress',
-                        value: _progressCount.toString(),
+                    _buildStatsCard(title: 'Progress', value: _progressCount.toString(),
                         icon: Icons.hourglass_bottom, color: const Color(0xFFF59E0B)),
                     const SizedBox(height: 10),
-                    _buildStatsCard(title: 'Done',
-                        value: _doneCount.toString(),
+                    _buildStatsCard(title: 'Done', value: _doneCount.toString(),
                         icon: Icons.check_circle_outline, color: const Color(0xFF2563EB)),
                   ],
                 ),
@@ -290,7 +331,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               onRefresh: _loadTickets,
               child: Column(
                 children: [
-                  // Status filter
+                  // Status filter chips
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -304,7 +345,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                           child: FilterChip(
                             label: Text(status),
                             selected: isSelected,
-                            onSelected: (selected) {
+                            onSelected: (_) {
                               setState(() {
                                 _statusFilter = status == 'Semua' ? null : status;
                               });
@@ -317,7 +358,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     ),
                   ),
 
-                  // Helpdesk filter
+                  // Helpdesk filter chips — filter by UUID
                   if (_helpdeskList.isNotEmpty)
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -325,8 +366,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       child: Row(
                         children: [
                           FilterChip(
-                            label: Text(
-                                _helpdeskFilter == null ? 'Semua Helpdesk' : _helpdeskFilter!),
+                            label: Text(_helpdeskFilter == null
+                                ? 'Semua Helpdesk'
+                                : _helpdeskNameForId(_helpdeskFilter)),
                             selected: _helpdeskFilter != null,
                             onSelected: (_) {
                               setState(() => _helpdeskFilter = null);
@@ -335,16 +377,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             checkmarkColor: const Color(0xFF0F766E),
                           ),
                           ..._helpdeskList.map((h) {
+                            final id = h['id'] as String?;
                             final name = h['name'] as String?;
                             return Padding(
                               padding: const EdgeInsets.only(left: 8),
                               child: FilterChip(
                                 label: Text(name ?? '-'),
-                                selected: _helpdeskFilter == name,
+                                selected: _helpdeskFilter == id,
                                 onSelected: (_) {
-                                  setState(() => _helpdeskFilter = name);
+                                  setState(() => _helpdeskFilter = id);
                                 },
-                                selectedColor: const Color(0xFF0F766E).withValues(alpha: 0.15),
+                                selectedColor:
+                                    const Color(0xFF0F766E).withValues(alpha: 0.15),
                                 checkmarkColor: const Color(0xFF0F766E),
                               ),
                             );
@@ -359,8 +403,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       children: [
                         Icon(Icons.list_alt, size: 16, color: Colors.grey.shade600),
                         const SizedBox(width: 4),
-                        Text('${tickets.length} tiket',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                        Text(
+                          '${tickets.length} tiket',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -372,7 +418,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade300),
+                                Icon(Icons.inbox_outlined,
+                                    size: 64, color: Colors.grey.shade300),
                                 const SizedBox(height: 12),
                                 Text('Belum ada tiket',
                                     style: TextStyle(color: Colors.grey.shade600)),
@@ -384,6 +431,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             itemCount: tickets.length,
                             itemBuilder: (context, index) {
                               final ticket = tickets[index];
+                              final assignedName = _helpdeskNameForId(ticket.assignedTo);
+                              final isAssigned = ticket.assignedTo != null;
+
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 child: InkWell(
@@ -433,14 +483,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                                   fontSize: 12, color: Colors.grey.shade700)),
                                         ],
                                         const SizedBox(height: 8),
-                                        // Assignment status
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: ticket.assignedTo != null
-                                                ? const Color(0xFF0F766E)
-                                                    .withValues(alpha: 0.1)
+                                            color: isAssigned
+                                                ? const Color(0xFF0F766E).withValues(alpha: 0.1)
                                                 : Colors.amber.withValues(alpha: 0.1),
                                             borderRadius: BorderRadius.circular(6),
                                           ),
@@ -448,21 +496,21 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
-                                                ticket.assignedTo != null
+                                                isAssigned
                                                     ? Icons.person
                                                     : Icons.person_off_outlined,
                                                 size: 14,
-                                                color: ticket.assignedTo != null
+                                                color: isAssigned
                                                     ? const Color(0xFF0F766E)
                                                     : Colors.amber.shade700,
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
-                                                ticket.assignedTo ?? 'Belum ditugaskan',
+                                                assignedName,
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w600,
-                                                  color: ticket.assignedTo != null
+                                                  color: isAssigned
                                                       ? const Color(0xFF0F766E)
                                                       : Colors.amber.shade700,
                                                 ),
@@ -476,7 +524,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                             Icon(Icons.touch_app, size: 12,
                                                 color: Colors.grey.shade400),
                                             const SizedBox(width: 4),
-                                            Text('Tap untuk assign / ubah',
+                                            Text('Tap untuk assign / ubah helpdesk',
                                                 style: TextStyle(
                                                     fontSize: 11,
                                                     color: Colors.grey.shade500)),
@@ -536,7 +584,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             subtitle: Text(preview,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                style: TextStyle(
+                                    color: Colors.grey.shade600, fontSize: 12)),
                             trailing: Chip(
                               label: Text(ticket.status,
                                   style: const TextStyle(color: Colors.white, fontSize: 10)),
@@ -597,4 +646,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       },
     );
   }
+}
+
+/// Mutable wrapper untuk hasil dialog assign
+class _AssignDialogResult {
+  bool confirmed = false;
+  String? selectedId;
 }

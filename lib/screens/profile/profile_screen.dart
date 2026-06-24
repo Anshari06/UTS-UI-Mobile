@@ -62,7 +62,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (widget.email != null) return widget.email!;
     // Build email from username for display
     final name = _profile?['name'] ?? 'user';
-    return '$name@uts-mobile.local';
+    return '$name@main.com';
   }
 
   String get _roleLabel {

@@ -30,6 +30,7 @@ class _HelpdeskHomeScreenState extends State<HelpdeskHomeScreen> {
   String? _statusFilter;
 
   String _userName = 'Helpdesk';
+  String? _userId; // profiles.id (UUID) — untuk compare dengan assignedTo
   final List<String> _statusOptions = ['Semua', 'Send', 'Open', 'Progress', 'Done'];
 
   @override
@@ -45,6 +46,7 @@ class _HelpdeskHomeScreenState extends State<HelpdeskHomeScreen> {
       if (mounted && profile != null) {
         setState(() {
           _userName = profile['name'] ?? 'Helpdesk';
+          _userId = profile['id'] as String?; // simpan UUID
           _isLoadingUser = false;
         });
       } else {
@@ -62,10 +64,11 @@ class _HelpdeskHomeScreenState extends State<HelpdeskHomeScreen> {
   }
 
   /// Filter tickets assigned to this logged-in helpdesk user
+  /// assignedTo di DB = profiles.id (UUID)
   List<Ticket> get _myTickets {
     final all = TicketStore.instance.tickets;
-    // Filter: hanya tiket yang assigned ke helpdesk ini
-    final mine = all.where((t) => t.assignedTo == _userName).toList();
+    // Filter: hanya tiket yang assigned ke helpdesk ini (compare UUID)
+    final mine = all.where((t) => t.assignedTo == _userId).toList();
 
     if (_statusFilter == null || _statusFilter == 'Semua') {
       return mine;
@@ -74,13 +77,13 @@ class _HelpdeskHomeScreenState extends State<HelpdeskHomeScreen> {
   }
 
   int get _sendCount => TicketStore.instance.tickets
-      .where((t) => t.assignedTo == _userName && t.status == 'Send').length;
+      .where((t) => t.assignedTo == _userId && t.status == 'Send').length;
   int get _openCount => TicketStore.instance.tickets
-      .where((t) => t.assignedTo == _userName && t.status == 'Open').length;
+      .where((t) => t.assignedTo == _userId && t.status == 'Open').length;
   int get _progressCount => TicketStore.instance.tickets
-      .where((t) => t.assignedTo == _userName && t.status == 'Progress').length;
+      .where((t) => t.assignedTo == _userId && t.status == 'Progress').length;
   int get _doneCount => TicketStore.instance.tickets
-      .where((t) => t.assignedTo == _userName && t.status == 'Done').length;
+      .where((t) => t.assignedTo == _userId && t.status == 'Done').length;
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -169,7 +172,7 @@ class _HelpdeskHomeScreenState extends State<HelpdeskHomeScreen> {
                     _buildStatsCard(
                       title: 'Total Ditugaskan',
                       value: TicketStore.instance.tickets
-                          .where((t) => t.assignedTo == _userName)
+                          .where((t) => t.assignedTo == _userId)
                           .length
                           .toString(),
                       icon: Icons.assignment_ind,
