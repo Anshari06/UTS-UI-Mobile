@@ -3,6 +3,7 @@ import '../../models/ticket.dart';
 import '../../models/ticket_history.dart';
 import '../../services/ticket_store.dart';
 import '../helpdesk/helpdesk_ticket_detail_screen.dart';
+import 'ticket_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
@@ -319,8 +320,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // Helper to build detail screen based on context
   Widget _buildDetailScreen(Ticket ticket) {
-    // Import dynamically to avoid circular dependency
-    return _UserTicketDetailPlaceholder(ticket: ticket);
+    return TicketDetailScreen(ticket: ticket);
   }
 
   Widget _buildHelpdeskHistory() {
@@ -578,7 +578,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildUserHistory() {
-    final tickets = TicketStore.instance.tickets;
+    // Filter hanya tiket dengan status 'done' (selesai)
+    final tickets = TicketStore.instance.tickets
+        .where((t) => t.status.toLowerCase() == 'done')
+        .toList();
+
+    // Sort by completedAt descending (newest first), fallback to createdAt
+    tickets.sort((a, b) {
+      final aDate = a.completedAt ?? a.createdAt;
+      final bDate = b.completedAt ?? b.createdAt;
+      return bDate.compareTo(aDate);
+    });
 
     if (tickets.isEmpty && !_isLoading) {
       return ListView(
@@ -588,15 +598,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade300),
+                Icon(Icons.check_circle_outline, size: 64, color: Colors.grey.shade300),
                 const SizedBox(height: 16),
                 Text(
-                  "Belum ada tiket",
+                  "Belum ada tiket selesai",
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Buat tiket baru untuk memulai",
+                  "Tiket yang telah selesai akan muncul di sini",
                   style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
                 ),
               ],
@@ -617,6 +627,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildTicketCard(Ticket ticket) {
+    final displayDate = ticket.completedAt ?? ticket.createdAt;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -626,9 +637,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             context,
             MaterialPageRoute(
               builder: (context) {
-                // Navigate to appropriate detail screen based on role
-                // For now, use TicketDetailScreen for user
-                return _buildUserTicketDetailScreen(ticket);
+                return TicketDetailScreen(ticket: ticket);
               },
             ),
           );
@@ -643,12 +652,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(ticket.status).withValues(alpha: 0.15),
+                      color: Colors.blue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(
-                      _getStatusIcon(ticket.status),
-                      color: _getStatusColor(ticket.status),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: Colors.blue,
                       size: 20,
                     ),
                   ),
@@ -668,7 +677,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '#${ticket.id} • ${_formatDate(ticket.createdAt)}',
+                          '#${ticket.id} • Selesai pada ${_formatDate(displayDate)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -677,18 +686,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ],
                     ),
                   ),
-                  Chip(
-                    label: Text(
-                      ticket.status,
-                      style: const TextStyle(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'SELESAI',
+                      style: TextStyle(
                         color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    backgroundColor: _getStatusColor(ticket.status),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
                   ),
                 ],
               ),
@@ -703,26 +717,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (ticket.assignedTo != null) ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.person_outline,
-                      size: 14,
-                      color: Colors.grey.shade500,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Assigned: ${ticket.assignedTo}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
                 ),
               ],
               const SizedBox(height: 8),
@@ -773,8 +767,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildUserTicketDetailScreen(Ticket ticket) {
-    // Import dynamically to avoid circular dependency
-    return _UserTicketDetailPlaceholder(ticket: ticket);
+    return TicketDetailScreen(ticket: ticket);
   }
 
   IconData _getStatusIcon(String status) {
@@ -844,24 +837,5 @@ class _HistoryScreenState extends State<HistoryScreen> {
     } else {
       return '${date.day}/${date.month}/${date.year}';
     }
-  }
-}
-
-// Simple placeholder widget for user ticket detail
-class _UserTicketDetailPlaceholder extends StatelessWidget {
-  final Ticket ticket;
-
-  const _UserTicketDetailPlaceholder({required this.ticket});
-
-  @override
-  Widget build(BuildContext context) {
-    // Navigate to the existing user ticket detail screen
-    // This is a workaround - in production you'd have proper navigation
-    return Scaffold(
-      appBar: AppBar(title: Text('Tiket #${ticket.id}')),
-      body: Center(
-        child: Text('Tiket: ${ticket.title}'),
-      ),
-    );
   }
 }

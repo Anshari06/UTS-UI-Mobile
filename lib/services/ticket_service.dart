@@ -78,11 +78,15 @@ class TicketService {
   }
 
   // Update ticket status in database
-  Future<bool> updateTicketStatus(int ticketId, String status) async {
+  Future<bool> updateTicketStatus(int ticketId, String status, {DateTime? completedAt}) async {
     try {
+      final updateData = <String, dynamic>{'status': status.toLowerCase()};
+      if (completedAt != null) {
+        updateData['completed_at'] = completedAt.toIso8601String();
+      }
       await supabase
           .from('tickets')
-          .update({'status': status.toLowerCase()})
+          .update(updateData)
           .eq('id', ticketId);
       return true;
     } catch (e) {

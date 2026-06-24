@@ -142,24 +142,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           setState(() => _isLoading = false);
 
                           if (error != null) {
-                            // Parse error message untuk kasih feedback spesifik
                             String errorMessage;
                             final lowerError = error.toLowerCase();
 
-                            if (lowerError.contains('invalid login credentials') ||
-                                lowerError.contains('invalid email or password') ||
-                                lowerError.contains('wrong') ||
-                                lowerError.contains('password')) {
-                              errorMessage = 'Password salah! Coba lagi.';
-                            } else if (lowerError.contains('email') ||
-                                lowerError.contains('not found') ||
-                                lowerError.contains('user not found')) {
-                              errorMessage = 'Akun tidak ditemukan!';
-                            } else if (lowerError.contains('rate limit') ||
+                            // Cek email belum verifikasi
+                            if (lowerError.contains('not confirmed') ||
+                                lowerError.contains('email not confirmed')) {
+                              errorMessage = 'Email belum diverifikasi. Cek inbox email Anda.';
+                            }
+                            // Cek rate limit
+                            else if (lowerError.contains('rate limit') ||
                                 lowerError.contains('too many')) {
                               errorMessage = 'Terlalu banyak percobaan. Tunggu sebentar.';
-                            } else {
-                              errorMessage = 'Login gagal: ${error.length > 50 ? error.substring(0, 50) : error}';
+                            }
+                            // Invalid login = username atau password salah
+                            else if (lowerError.contains('invalid login credentials') ||
+                                lowerError.contains('no user') ||
+                                lowerError.contains('not found') ||
+                                lowerError.contains('user not found')) {
+                              errorMessage = 'Username atau password salah!';
+                            }
+                            // Fallback
+                            else {
+                              errorMessage = 'Login gagal. Pastikan username dan password benar.';
                             }
 
                             ScaffoldMessenger.of(context).showSnackBar(

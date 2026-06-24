@@ -5,6 +5,7 @@ class Ticket {
   final String description;
   final String createdBy;
   final DateTime createdAt;
+  final DateTime? completedAt;
   final String? assignedTo;
   final String? priority;
 
@@ -15,6 +16,7 @@ class Ticket {
     this.description = '',
     this.createdBy = 'user',
     DateTime? createdAt,
+    this.completedAt,
     this.assignedTo,
     this.priority = 'Normal',
   }) : createdAt = createdAt ?? DateTime.now();
@@ -26,6 +28,7 @@ class Ticket {
     String? description,
     String? createdBy,
     DateTime? createdAt,
+    DateTime? completedAt,
     String? assignedTo,
     String? priority,
   }) {
@@ -36,6 +39,7 @@ class Ticket {
       description: description ?? this.description,
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
+      completedAt: completedAt ?? this.completedAt,
       assignedTo: assignedTo ?? this.assignedTo,
       priority: priority ?? this.priority,
     );

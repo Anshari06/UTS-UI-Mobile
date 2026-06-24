@@ -66,6 +66,9 @@ class TicketStore extends ChangeNotifier {
           createdAt: row['created_at'] != null
               ? DateTime.parse(row['created_at'] as String)
               : DateTime.now(),
+          completedAt: row['completed_at'] != null
+              ? DateTime.parse(row['completed_at'] as String)
+              : null,
           assignedTo: row['assigned_to'],
           priority: priority,
         );
@@ -328,10 +331,20 @@ class TicketStore extends ChangeNotifier {
     }
 
     final oldStatus = _tickets[index].status;
-    _tickets[index] = _tickets[index].copyWith(status: status);
+
+    // Set completed_at when status becomes 'done', clear it otherwise
+    DateTime? completedAt;
+    if (status.toLowerCase() == 'done') {
+      completedAt = DateTime.now();
+    }
+
+    _tickets[index] = _tickets[index].copyWith(
+      status: status,
+      completedAt: completedAt,
+    );
 
     // Update status in database
-    await _ticketService.updateTicketStatus(ticketId, status);
+    await _ticketService.updateTicketStatus(ticketId, status, completedAt: completedAt);
 
     // Add history to DB
     await _ticketService.addHistory(
