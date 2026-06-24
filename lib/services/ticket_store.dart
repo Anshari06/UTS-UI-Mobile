@@ -17,7 +17,7 @@ class TicketStore extends ChangeNotifier {
 
   final List<Ticket> _tickets = [];
   final Map<int, List<ChatMessage>> _messages = {};
-  final Map<int, Map<String, dynamic>> _latestComments = {}; // ticketId -> latest comment
+  final Map<int, Map<String, dynamic>> _latestComments = {};
   final List<AppNotification> _notifications = [];
   final List<TicketHistory> _history = [];
 
@@ -29,7 +29,6 @@ class TicketStore extends ChangeNotifier {
 
   List<TicketHistory> get history => List.unmodifiable(_history);
 
-  // Get latest comment preview for a ticket
   Map<String, dynamic>? getLatestComment(int ticketId) {
     return _latestComments[ticketId];
   }
@@ -77,7 +76,6 @@ class TicketStore extends ChangeNotifier {
         ticketIds.add(ticket.id);
       }
 
-      // Fetch latest comments for all tickets
       if (ticketIds.isNotEmpty) {
         final latestComments = await _commentService.getLatestCommentsForTickets(ticketIds);
         _latestComments.clear();
@@ -87,7 +85,6 @@ class TicketStore extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching tickets: $e');
-      // Jangan clear list kalau fetch gagal — data lama tetap tampil
     }
   }
 
@@ -104,7 +101,6 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
-  // For helpdesk/admin - fetch all notifications
   Future<void> fetchAllNotifications() async {
     try {
       final rows = await _notificationService.getAllNotifications();
@@ -118,7 +114,6 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
-  // For helpdesk - fetch notifications from users (messages)
   Future<void> fetchHelpdeskNotifications() async {
     try {
       final rows = await _notificationService.getHelpdeskNotifications();
@@ -129,7 +124,6 @@ class TicketStore extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error fetching helpdesk notifications: $e');
-      // Fallback to all notifications
       await fetchAllNotifications();
     }
   }
@@ -137,7 +131,6 @@ class TicketStore extends ChangeNotifier {
   Future<void> fetchHistoryFromDb() async {
     try {
       _history.clear();
-      // Fetch all ticket histories
       for (final ticket in _tickets) {
         final rows = await _ticketService.getTicketHistories(ticket.id);
         for (final row in rows) {
@@ -153,7 +146,6 @@ class TicketStore extends ChangeNotifier {
           ));
         }
       }
-      // Sort by created_at descending (newest first)
       _history.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       notifyListeners();
     } catch (e) {
@@ -161,11 +153,9 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
-  // For helpdesk - fetch all histories for all tickets
   Future<void> fetchAllHistories() async {
     try {
       _history.clear();
-      // Get all tickets (for staff)
       final allTickets = await _ticketService.getAllTickets();
       for (final row in allTickets) {
         final ticketId = row['id'] as int;
@@ -183,7 +173,6 @@ class TicketStore extends ChangeNotifier {
           ));
         }
       }
-      // Sort by created_at descending (newest first)
       _history.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       notifyListeners();
     } catch (e) {
@@ -219,11 +208,9 @@ class TicketStore extends ChangeNotifier {
     }
   }
 
-  /// Fetch history/tracking untuk satu tiket saja
   Future<void> fetchHistoryForTicket(int ticketId) async {
     try {
       final rows = await _ticketService.getTicketHistories(ticketId);
-      // Merge ke _history yang sudah ada (avoid dupe)
       final existingIds = _history
           .where((h) => h.ticketId == ticketId)
           .map((h) => '${h.ticketId}_${h.createdAt.millisecondsSinceEpoch}')
@@ -257,41 +244,30 @@ class TicketStore extends ChangeNotifier {
   }
 
   String latestMessagePreview(int ticketId) {
-    // First check in-memory messages
     final messages = _messages[ticketId];
     if (messages != null && messages.isNotEmpty) {
       return messages.last.text;
     }
-
-    // Then check latest comment from DB
     final latestComment = _latestComments[ticketId];
     if (latestComment != null) {
       final comment = latestComment['comment'] as String?;
-      final profile = latestComment['profiles'] as Map<String, dynamic>?;
-      final senderName = profile?['name'] as String?;
       if (comment != null) {
         return comment;
       }
     }
-
     return 'Belum ada chat';
   }
 
-  // Get sender name for a ticket's latest message
   String latestMessageSender(int ticketId) {
-    // First check in-memory messages
     final messages = _messages[ticketId];
     if (messages != null && messages.isNotEmpty) {
       return messages.last.sender;
     }
-
-    // Then check latest comment from DB
     final latestComment = _latestComments[ticketId];
     if (latestComment != null) {
       final profile = latestComment['profiles'] as Map<String, dynamic>?;
-      return profile?['name'] as String? ?? 'Unknown';
+      return profile?['name'] as String? ?? '';
     }
-
     return '';
   }
 
@@ -314,7 +290,6 @@ class TicketStore extends ChangeNotifier {
           createdAt: DateTime.now(),
         ),
       );
-      // Notify helpdesk that user sent a message
       await _notificationService.notifyHelpdesk(
         title: 'Pesan baru dari User',
         body: 'Tiket #$ticketId: $text',
@@ -343,7 +318,6 @@ class TicketStore extends ChangeNotifier {
           createdAt: DateTime.now(),
         ),
       );
-      // Notify the ticket owner user
       final userId = await _notificationService.getTicketOwnerId(ticketId);
       if (userId != null) {
         await _notificationService.notifyUser(
@@ -358,14 +332,15 @@ class TicketStore extends ChangeNotifier {
   }
 
   Future<void> updateStatus(int ticketId, String status) async {
-    final index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
+    var index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
     if (index == -1) {
-      return;
+      await fetchTicketsFromDb();
+      index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
     }
+    if (index == -1) return;
 
     final oldStatus = _tickets[index].status;
 
-    // Set completed_at when status becomes 'done', clear it otherwise
     DateTime? completedAt;
     if (status.toLowerCase() == 'done') {
       completedAt = DateTime.now();
@@ -376,10 +351,8 @@ class TicketStore extends ChangeNotifier {
       completedAt: completedAt,
     );
 
-    // Update status in database
     await _ticketService.updateTicketStatus(ticketId, status, completedAt: completedAt);
 
-    // Add history to DB
     await _ticketService.addHistory(
       ticketId: ticketId,
       action: 'Status diubah dari $oldStatus ke $status',
@@ -387,7 +360,6 @@ class TicketStore extends ChangeNotifier {
       newValue: status,
     );
 
-    // Notify the ticket owner user with detailed message
     final userId = await _notificationService.getTicketOwnerId(ticketId);
     if (userId != null) {
       await _notificationService.notifyUser(
@@ -401,19 +373,35 @@ class TicketStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> assignTicket(int ticketId, String assignee) async {
-    final index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
+  /// Assign ticket to helpdesk. Returns true if success.
+  Future<bool> assignTicket(int ticketId, String assignee) async {
+    // Fetch from DB if ticket not in local list
+    var index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
     if (index == -1) {
-      return;
+      debugPrint('assignTicket: ticket $ticketId not in local list, fetching...');
+      await fetchTicketsFromDb();
+      index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
+    }
+    if (index == -1) {
+      debugPrint('assignTicket: FAILED — ticket $ticketId still not found');
+      return false;
     }
 
     final oldAssignee = _tickets[index].assignedTo ?? 'Unassigned';
     _tickets[index] = _tickets[index].copyWith(assignedTo: assignee);
+    notifyListeners();
 
-    // Update assignee in database
-    await _ticketService.assignTicketTo(ticketId, assignee);
+    // Update database
+    final success = await _ticketService.assignTicketTo(ticketId, assignee);
+    if (!success) {
+      // Rollback
+      _tickets[index] = _tickets[index].copyWith(assignedTo: oldAssignee);
+      notifyListeners();
+      debugPrint('assignTicket: FAILED — database update returned false');
+      return false;
+    }
 
-    // Add history to DB
+    // Add history
     await _ticketService.addHistory(
       ticketId: ticketId,
       action: 'Ditugaskan kepada $assignee',
@@ -421,7 +409,7 @@ class TicketStore extends ChangeNotifier {
       newValue: assignee,
     );
 
-    // Notify the assigned helpdesk user
+    // Notify assigned helpdesk
     await _notificationService.notifyUser(
       userId: assignee,
       title: 'Tiket Ditugaskan',
@@ -429,7 +417,7 @@ class TicketStore extends ChangeNotifier {
       ticketId: ticketId,
     );
 
-    // Notify the ticket owner user
+    // Notify ticket owner
     final userId = await _notificationService.getTicketOwnerId(ticketId);
     if (userId != null) {
       await _notificationService.notifyUser(
@@ -440,22 +428,36 @@ class TicketStore extends ChangeNotifier {
       );
     }
 
-    notifyListeners();
+    debugPrint('assignTicket: SUCCESS');
+    return true;
   }
 
-  Future<void> unassignTicket(int ticketId) async {
-    final index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
+  /// Unassign ticket. Returns true if success.
+  Future<bool> unassignTicket(int ticketId) async {
+    var index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
     if (index == -1) {
-      return;
+      debugPrint('unassignTicket: ticket $ticketId not in local list, fetching...');
+      await fetchTicketsFromDb();
+      index = _tickets.indexWhere((ticket) => ticket.id == ticketId);
+    }
+    if (index == -1) {
+      debugPrint('unassignTicket: FAILED — ticket $ticketId not found');
+      return false;
     }
 
     final oldAssignee = _tickets[index].assignedTo ?? 'Unassigned';
     _tickets[index] = _tickets[index].copyWith(assignedTo: null);
+    notifyListeners();
 
-    // Update assignee to null in database
-    await _ticketService.unassignTicket(ticketId);
+    final success = await _ticketService.unassignTicket(ticketId);
+    if (!success) {
+      // Rollback
+      _tickets[index] = _tickets[index].copyWith(assignedTo: oldAssignee);
+      notifyListeners();
+      debugPrint('unassignTicket: FAILED — database update returned false');
+      return false;
+    }
 
-    // Add history to DB
     await _ticketService.addHistory(
       ticketId: ticketId,
       action: 'Dibatalkan assign dari $oldAssignee',
@@ -463,7 +465,6 @@ class TicketStore extends ChangeNotifier {
       newValue: 'Unassigned',
     );
 
-    // Notify the ticket owner user
     final userId = await _notificationService.getTicketOwnerId(ticketId);
     if (userId != null) {
       await _notificationService.notifyUser(
@@ -474,7 +475,8 @@ class TicketStore extends ChangeNotifier {
       );
     }
 
-    notifyListeners();
+    debugPrint('unassignTicket: SUCCESS');
+    return true;
   }
 
   Future<void> markNotificationAsRead(int notificationId) async {

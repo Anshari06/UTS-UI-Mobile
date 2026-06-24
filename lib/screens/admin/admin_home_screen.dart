@@ -139,92 +139,85 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   /// Show assign dialog — assigned_to = profiles.id (UUID)
   Future<void> _showAssignDialog(Ticket ticket) async {
-    final result = _AssignDialogResult();
+    final formKey = GlobalKey<FormState>();
+    final dropdownKey = GlobalKey<FormFieldState<String?>>();
+    String? lastSelectedId;
 
-    await showDialog<void>(
+    final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) {
-          String? selectedId = ticket.assignedTo;
-
           return AlertDialog(
             title: Text('Tugaskan Tiket #${ticket.id}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ticket.title,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  ticket.description.isEmpty ? 'Tanpa deskripsi' : ticket.description,
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (ticket.assignedTo != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.amber.shade700),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Saat ini: ${_helpdeskNameForId(ticket.assignedTo)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.amber.shade800,
-                            fontWeight: FontWeight.w500,
-                          ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ticket.description.isEmpty ? 'Tanpa deskripsi' : ticket.description,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 16),
+                  FormField<String?>(
+                    key: dropdownKey,
+                    initialValue: ticket.assignedTo,
+                    validator: (v) => null,
+                    builder: (field) {
+                      lastSelectedId = field.value;
+                      return DropdownButtonFormField<String>(
+                        value: field.value,
+                        decoration: const InputDecoration(
+                          labelText: 'Tugaskan ke Helpdesk',
+                          prefixIcon: Icon(Icons.person_add_alt),
                         ),
-                      ],
-                    ),
+                        items: _helpdeskList.map((h) {
+                          final id = h['id'] as String?;
+                          return DropdownMenuItem<String>(
+                            value: id,
+                            child: Text(h['name'] as String? ?? '-'),
+                          );
+                        }).toList(),
+                        onChanged: (v) {
+                          field.didChange(v);
+                        },
+                      );
+                    },
                   ),
-                ],
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedId,
-                  decoration: const InputDecoration(
-                    labelText: 'Tugaskan ke Helpdesk',
-                    prefixIcon: Icon(Icons.person_add_alt),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: null,
-                      child: Text('-- Lepas Penugasan --'),
+                  if (ticket.assignedTo != null) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        icon: const Icon(Icons.person_remove, color: Colors.red),
+                        label: const Text('Lepas Penugasan',
+                            style: TextStyle(color: Colors.red)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.red),
+                        ),
+                      ),
                     ),
-                    ..._helpdeskList.map((h) => DropdownMenuItem<String>(
-                          value: h['id'] as String?,
-                          child: Text(h['name'] as String? ?? '-'),
-                        )),
                   ],
-                  onChanged: (v) => setDialogState(() => selectedId = v),
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  result.confirmed = false;
-                  Navigator.pop(dialogContext);
-                },
+                onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('Batal'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  result.confirmed = true;
-                  result.selectedId = selectedId;
-                  Navigator.pop(dialogContext);
-                },
+                onPressed: () => Navigator.pop(dialogContext, true),
                 child: const Text('Simpan'),
               ),
             ],
@@ -233,25 +226,42 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ),
     );
 
-    if (!result.confirmed) return;
+    if (confirmed != true) return;
 
-    if (result.selectedId == null) {
+    final selectedId = lastSelectedId;
+    debugPrint('DEBUG: selectedId=$selectedId, ticket.id=${ticket.id}');
+
+    if (selectedId == null) {
+      debugPrint('DEBUG: calling unassignTicket');
       await TicketStore.instance.unassignTicket(ticket.id);
-    } else {
-      await TicketStore.instance.assignTicket(ticket.id, result.selectedId!);
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result.selectedId == null
-              ? 'Tiket #${ticket.id} dilepas dari penugasan'
-              : 'Tiket #${ticket.id} ditugaskan ke ${_helpdeskNameForId(result.selectedId)}',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tiket #${ticket.id} dilepas dari penugasan'),
+          backgroundColor: Colors.green,
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
+      );
+    } else {
+      debugPrint('DEBUG: calling assignTicket with $selectedId');
+      final ok = await TicketStore.instance.assignTicket(ticket.id, selectedId);
+      if (!mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal menugaskan tiket. Coba lagi.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Tiket #${ticket.id} ditugaskan ke ${_helpdeskNameForId(selectedId)}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
     _loadTickets();
   }
 

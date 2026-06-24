@@ -11,7 +11,6 @@ class TicketService {
     String? newValue,
   }) async {
     final user = supabase.auth.currentUser;
-
     if (user == null) return;
 
     try {
@@ -23,7 +22,7 @@ class TicketService {
         'new_value': newValue,
       });
     } catch (e) {
-      // Handle error or print
+      debugPrint('addHistory error: $e');
     }
   }
 
@@ -33,10 +32,7 @@ class TicketService {
   }) async {
     try {
       final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        return 'User tidak login';
-      }
+      if (user == null) return 'User tidak login';
 
       final response = await supabase
           .from('tickets')
@@ -51,11 +47,7 @@ class TicketService {
           .single();
 
       final ticketId = response['id'] as int;
-
-      await addHistory(
-        ticketId: ticketId,
-        action: 'Membuat tiket',
-      );
+      await addHistory(ticketId: ticketId, action: 'Membuat tiket');
 
       return null;
     } catch (e) {
@@ -70,24 +62,19 @@ class TicketService {
           .select()
           .eq('ticket_id', ticketId)
           .order('created_at', ascending: true);
-
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       return [];
     }
   }
 
-  // Update ticket status in database
   Future<bool> updateTicketStatus(int ticketId, String status, {DateTime? completedAt}) async {
     try {
       final updateData = <String, dynamic>{'status': status.toLowerCase()};
       if (completedAt != null) {
         updateData['completed_at'] = completedAt.toIso8601String();
       }
-      await supabase
-          .from('tickets')
-          .update(updateData)
-          .eq('id', ticketId);
+      await supabase.from('tickets').update(updateData).eq('id', ticketId);
       return true;
     } catch (e) {
       debugPrint('updateTicketStatus error: $e');
@@ -95,15 +82,22 @@ class TicketService {
     }
   }
 
-  // Update assigned_to in database
   Future<bool> assignTicketTo(int ticketId, String assignee) async {
-    debugPrint('assignTicketTo CALLED: ticketId=$ticketId, assignee=$assignee');
+    debugPrint('assignTicketTo: ticketId=$ticketId, assignee=$assignee');
     try {
-      final result = await supabase
+      await supabase.from('tickets').update({'assigned_to': assignee}).eq('id', ticketId);
+
+      // Verify
+      final verify = await supabase
           .from('tickets')
-          .update({'assigned_to': assignee})
-          .eq('id', ticketId);
-      debugPrint('assignTicketTo result: $result');
+          .select('assigned_to')
+          .eq('id', ticketId)
+          .maybeSingle();
+      debugPrint('assignTicketTo verify: assigned_to = ${verify?['assigned_to']}');
+      if (verify == null) {
+        debugPrint('assignTicketTo: ticket not found after update');
+        return false;
+      }
       return true;
     } catch (e) {
       debugPrint('assignTicketTo error: $e');
@@ -111,13 +105,17 @@ class TicketService {
     }
   }
 
-  // Unassign ticket in database
   Future<bool> unassignTicket(int ticketId) async {
+    debugPrint('unassignTicket: ticketId=$ticketId');
     try {
-      await supabase
+      await supabase.from('tickets').update({'assigned_to': null}).eq('id', ticketId);
+
+      final verify = await supabase
           .from('tickets')
-          .update({'assigned_to': null})
-          .eq('id', ticketId);
+          .select('assigned_to')
+          .eq('id', ticketId)
+          .maybeSingle();
+      debugPrint('unassignTicket verify: assigned_to = ${verify?['assigned_to']}');
       return true;
     } catch (e) {
       debugPrint('unassignTicket error: $e');
@@ -125,7 +123,6 @@ class TicketService {
     }
   }
 
-  // Get all tickets without role check (for internal use)
   Future<List<Map<String, dynamic>>> getAllTickets() async {
     try {
       final response = await supabase
@@ -141,14 +138,9 @@ class TicketService {
 
   Future<List<Map<String, dynamic>>> getTickets() async {
     final user = supabase.auth.currentUser;
-
-    if (user == null) {
-      debugPrint('getTickets: user is null');
-      return [];
-    }
+    if (user == null) return [];
 
     try {
-      // Check if profiles table has role column
       String? role;
       try {
         final profile = await supabase
@@ -156,10 +148,8 @@ class TicketService {
             .select('role')
             .eq('id', user.id)
             .maybeSingle();
-
         if (profile != null) {
           role = (profile['role'] as String?)?.trim().toLowerCase();
-          debugPrint('getTickets: user role = $role');
         }
       } catch (e) {
         debugPrint('getTickets: profiles query failed: $e');
@@ -171,30 +161,25 @@ class TicketService {
             .from('tickets')
             .select()
             .order('created_at', ascending: false);
-        debugPrint('getTickets: staff mode, ${response.length} tickets');
         return List<Map<String, dynamic>>.from(response);
       }
     } catch (e) {
       debugPrint('getTickets: role check failed: $e');
     }
 
-    // Default: Return only own tickets for regular user
     var response = await supabase
         .from('tickets')
         .select()
         .eq('user_id', user.id)
         .order('created_at', ascending: false);
 
-    // Fallback: if own tickets empty, fetch all (for debugging)
     if (response.isEmpty) {
-      debugPrint('getTickets: own tickets empty, fetching all tickets');
       response = await supabase
           .from('tickets')
           .select()
           .order('created_at', ascending: false);
     }
 
-    debugPrint('getTickets: ${response.length} tickets');
     return List<Map<String, dynamic>>.from(response);
   }
 }
